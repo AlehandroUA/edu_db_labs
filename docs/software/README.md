@@ -253,3 +253,158 @@ INSERT INTO `project_db`.`tasks` (`Name`, `Developer`, `Status`, `Deadline`, `Pr
 
 - RESTfull сервіс для управління даними
 
+### Головний файл
+
+```python
+from flask import Flask
+
+app = Flask(__name__);
+    
+from payments_controller import *
+```
+
+### Payments Controller 
+
+```python
+from app import app
+from flask import request
+from payments_model import Payments
+
+payments = Payments();
+
+
+@app.route("/payments")
+def get_all_payments():
+    return payments.get_all_payments();
+
+@app.route("/payment/<id>")
+def get_payment_by_id(id):
+    return payments.get_payment_by_id(id);
+
+@app.route("/payment/projectId/<Projectid>")
+def get_payments_by_project_id(Projectid):
+    return payments.get_payments_by_project_id(Projectid);
+
+@app.route("/payment/add", methods=["POST"])
+def add_payment():
+    return payments.add_payment(request.form);
+
+@app.route("/payment/update", methods=["PUT"])
+def update_payment():
+    return payments.update_payment(request.form);
+
+@app.route("/payment/delete/<id>", methods=["DELETE"])
+def delete_payment(id):
+    return payments.delete_payment(id);
+```
+
+### Payments Model
+
+```py
+import json
+import mysql.connector
+import base64
+
+class Payments:
+    def __init__(self):
+        try:
+            self.con = mysql.connector.connect(host="localhost",user="root",password="db12345!",database='project_db');
+            self.cur = self.con.cursor(dictionary=True);
+            self.con.autocommit = True;
+            print("succesful connection");
+        except:
+            print("failed");
+    
+
+    def get_all_payments(self):
+        self.cur.execute("SELECT * FROM payments")
+        return_value = self.cur.fetchall();
+
+        if(not (self.cur.rowcount > 0)):
+            return_value = {"message":"There is no payments", "error": "Not Found", "status code": 404}
+        
+        return return_value;
+
+
+    def get_payment_by_id(self,id):
+        self.cur.execute(f"SELECT * FROM payments WHERE Id='{id}'")
+        return_value = self.cur.fetchall();
+
+        if(not (self.cur.rowcount > 0)):
+            return_value = {"message":"There is no payment with such id", "error": "Not Found", "status code": 404}
+        
+        return return_value;
+
+
+    def get_payments_by_project_id(self,ProjectId):
+        self.cur.execute(f"SELECT * FROM payments WHERE ProjectId='{ProjectId}'")
+        return_value = self.cur.fetchall();
+
+        if(not (self.cur.rowcount > 0)):
+            return_value = {"message":"There is no payment that has such ProjectId", "error": "Not Found", "status code": 404}
+        
+        self.cur.execute(f"SELECT * FROM projects WHERE Id='{ProjectId}'")
+        self.cur.fetchall();
+
+        if(not (self.cur.rowcount > 0)):
+            return_value = {"message":"There is no project with such id", "error": "Not Found", "status code": 404}
+
+        return return_value;
+
+
+    def add_payment(self,data):
+        data = dict(data);
+        return_value = "";
+        if (len(data) == 5):
+            self.cur.execute(f"SELECT * FROM projects WHERE Id={data["ProjectId"]}");
+            result = self.cur.fetchall();
+            if(self.cur.rowcount != 0):
+                self.cur.execute(f"""INSERT INTO payments (CardNumber,CardCVV,CardExpireDate,Email,ProjectId)
+                values ('{data["CardNumber"]}', '{data["CardCVV"]}', '{data["CardExpireDate"]}', '{data["Email"]}', {data["ProjectId"]})""");
+                return_value = {"message":"Successfully added to database", "status code": 200};
+            else:
+                return_value = {"message":"There is no project with such id", "error": "Not Found", "status code": 404};
+        else:
+            return_value = {"message":"Invalid amount of keys", "error": "Bad Request", "status code": 400};
+        
+        return return_value;
+
+    def update_payment(self,data):
+        if(len(dict(data)) == 6):
+            self.cur.execute(f"SELECT * FROM projects WHERE Id={data["ProjectId"]}");
+            result = self.cur.fetchall();
+            if(self.cur.rowcount != 0):
+                self.cur.execute(f"""UPDATE payments SET CardNumber='{data["CardNumber"]}'
+                                 ,CardCVV='{data["CardCVV"]}'
+                                 ,CardExpireDate='{data["CardExpireDate"]}'
+                                 ,Email='{data["Email"]}'
+                                 ,ProjectId={data["ProjectId"]} 
+                                 WHERE Id={data["Id"]}""");
+                
+                if(self.cur.rowcount != 0):
+                    return_value = {"message":"Successfully updated ", "status code": 200};
+                else:
+                    return_value = {"message":"Nothing to update", "error": "Not Found", "status code": 404};
+            else:
+                return_value = {"message":"There is no project with such id", "error": "Not Found", "status code": 404};
+        else:
+            return_value = {"message":"Invalid amount of keys", "error": "Bad Request", "status code": 400};
+        
+        return return_value;
+
+
+    def delete_payment(self,id):
+        
+        self.cur.execute(f"DELETE FROM payments WHERE Id={id}")
+        return_value = "";
+
+        if(self.cur.rowcount != 0):
+            return_value = {"message":"Payment was successfully deleted", "status code": 204};
+        else:
+            return_value = {"message":"Nothing to delete", "error": "Not Found", "status code": 404};
+    
+
+        return return_value;
+
+
+
